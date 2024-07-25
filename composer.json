@@ -1,0 +1,36 @@
+{
+    "name": "hulang/think-jwt",
+    "description": "JSON Web Token Authentication for thinkphp",
+    "keywords": [
+        "auth",
+        "authentication",
+        "json web token",
+        "jwt",
+        "thinkphp"
+    ],
+    "license": "Apache-2.0",
+    "authors": [
+        {
+            "name": "心情love",
+            "email": "myhsj@qq.com",
+            "role": "Developer"
+        }
+    ],
+    "require": {
+        "php": ">=8.0.0",
+        "topthink/framework": "^8.0.0",
+        "firebase/php-jwt": "^6.10"
+    },
+    "autoload": {
+        "psr-4": {
+            "think\\": "src/"
+        }
+    },
+    "extra": {
+        "think": {
+            "config": {
+                "jwt": "config/config.php"
+            }
+        }
+    }
+}
