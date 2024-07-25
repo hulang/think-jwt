@@ -55,7 +55,7 @@ class Jwt
         // 定义JWT的载荷,包含生效时间、过期时间、JWT标识和数据
         $payload = [
             'nbf' => $invali_time, // Not Before,指定JWT在什么时间之后才有效
-            'exp' => $expire_time, //Expiration Time,指定JWT在什么时间之后失效
+            'exp' => $expire_time, // Expiration Time,指定JWT在什么时间之后失效
             'jwt_ide' => $keyId, // 为JWT分配一个唯一的标识
             'data' => $data, // 包含需要传递的数据
         ];
@@ -147,27 +147,27 @@ class Jwt
             // 使用JWT库解码令牌,检查是否设置了秘钥
             $token_obj = \Firebase\JWT\JWT::decode($token, new Key($this->secret, 'HS256'));
         } catch (InvalidArgumentException $e) {
-            // 抛出异常：秘钥未设置
+            // 抛出异常:秘钥未设置
             throw new \Exception('未设置jwt秘钥', self::JWT_SECRET_MISS);
         } catch (UnexpectedValueException $e) {
-            // 抛出异常：令牌格式异常
-            throw new \Exception('token格式异常:' . $e->getMessage(), self::INVALID_TOKEN);
+            // 抛出异常:令牌格式异常
+            throw new \Exception('令牌格式异常:' . $e->getMessage(), self::INVALID_TOKEN);
         } catch (SignatureInvalidException $e) {
-            // 抛出异常：签名无效
-            throw new \Exception('token格式异常:' . $e->getMessage(), self::INVALID_TOKEN);
+            // 抛出异常:签名无效
+            throw new \Exception('签名无效:' . $e->getMessage(), self::INVALID_TOKEN);
         } catch (BeforeValidException $e) {
-            // 抛出异常：令牌尚未生效
-            throw new \Exception('token失效:' . $e->getMessage(), self::INVALID_TOKEN);
+            // 抛出异常:令牌尚未生效
+            throw new \Exception('令牌尚未生效:' . $e->getMessage(), self::INVALID_TOKEN);
         } catch (ExpiredException $e) {
-            // 抛出异常：令牌已过期
-            throw new \Exception('token完全失效:' . $e->getMessage(), self::TOKEN_EXPIRE_LONG);
+            // 抛出异常:令牌已过期
+            throw new \Exception('令牌已过期:' . $e->getMessage(), self::TOKEN_EXPIRE_LONG);
         } catch (DomainException $e) {
-            // 抛出异常：令牌已过期
-            throw new \Exception('token域名失效:' . $e->getMessage(), self::TOKEN_DOMAIN);
+            // 抛出异常:域名失效
+            throw new \Exception('域名失效:' . $e->getMessage(), self::TOKEN_DOMAIN);
         }
         // 检查解码后的令牌是否在黑名单中
         if ($this->InBlacklist($token_obj->jwt_ide) === true) {
-            // 抛出异常：令牌已被注销
+            // 抛出异常:令牌已被注销
             throw new \Exception('token已被注销', self::TOKEN_LOGOUT);
         }
         // 返回解码并验证通过的令牌对象
