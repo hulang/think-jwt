@@ -1,17 +1,21 @@
-# thinkphp-jwt
+**think-jwt**
 
-## 安装 
-使用composer管理依赖方式安装
-```
+<p align="center"> 
+  您是第  <img src="https://profile-counter.glitch.me/github:hulang:think-jwt/count.svg" />位访问者
+</p>
+
+#### 安装 
+
+```sh
 composer require hulang/think-jwt
 ```
 
-## 环境要求
+#### 环境要求
 
-php:>=8.0
-thinkphp:>=8.0
+- php >= 8.0
+- thinkphp >= 8.0
 
-## 配置
+#### 配置
 
 ```php
 <?php
@@ -32,7 +36,8 @@ return [
 ];
 
 ```
-## 使用案例
+#### 使用案例
+
 ```php
 <?php
 namespace app\index\controller;
@@ -53,6 +58,7 @@ class McjController {
         }
         dump($res);exit;
     }
+
     // 权限认证
     public function check(){
         $token = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiIsImtpZCI6IlFzMkdJaVRnVldSVUZSV3MifQ.eyJuYmYiOjE1MzQyMzQyNDksImV4cCI6MTUzNDgzOTA0OSwiand0X2lkZSI6IlFzMkdJaVRnVldSVUZSV3MiLCJkYXRhIjp7InVzZXJfaWQiOjEyfX0.pond6EJ59yH9k3MJusVugg7W6hHx1Y_lLGawJBctflY';
@@ -79,6 +85,7 @@ class McjController {
         }
         dump($res);
     }
+
     // 注销令牌,账号登出
     public function logout(){
         $token = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiIsImtpZCI6IlFzMkdJaVRnVldSVUZSV3MifQ.eyJuYmYiOjE1MzQyMzQyNDksImV4cCI6MTUzNDgzOTA0OSwiand0X2lkZSI6IlFzMkdJaVRnVldSVUZSV3MiLCJkYXRhIjp7InVzZXJfaWQiOjEyfX0.pond6EJ59yH9k3MJusVugg7W6hHx1Y_lLGawJBctflY';
