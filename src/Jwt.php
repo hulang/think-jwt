@@ -98,7 +98,7 @@ class Jwt
                 throw new \Exception('token过期需要刷新', self::TOKEN_EXPIRE);
             }
             $json['code'] = 1;
-            $json['data'] = $arr;
+            $json['data'] = $arr['data'];
         } catch (\Exception $e) {
             $json['msg'] = $e->getMessage();
         }
