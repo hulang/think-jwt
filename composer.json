@@ -1,19 +1,18 @@
 {
     "name": "hulang/think-jwt",
-    "description": "JSON Web Token Authentication for thinkphp",
+    "description": "基于firebase/php-jwt 6.10的ThinkPHP 8.0+ Jwt 验证",
     "keywords": [
         "auth",
         "authentication",
-        "json web token",
+        "firebase/php-jwt",
         "jwt",
         "thinkphp"
     ],
     "license": "Apache-2.0",
     "authors": [
         {
-            "name": "心情love",
-            "email": "myhsj@qq.com",
-            "role": "Developer"
+            "name": "hulang",
+            "email": "hulangfy@163.com"
         }
     ],
     "require": {
