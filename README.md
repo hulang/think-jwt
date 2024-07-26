@@ -85,9 +85,23 @@ class McjController {
     public function check()
     {
         $res = '';
-        $token = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiIsImtpZCI6IldFN2FaWWFsMDhyZVoyUGMifQ.eyJuYmYiOjE3MjE5MDYzMTYsImV4cCI6MTcyMjUxMTExNiwiand0X2lkZSI6IldFN2FaWWFsMDhyZVoyUGMiLCJkYXRhIjp7InVzZXJfaWQiOjEyfX0.yAfaLzrQo5r1EgrirvicT_l2US7LUhOZecnNjIgqLtE';
+        $token = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiIsImtpZCI6ImFIZk1VTjRhanFDZnZEOGIifQ.eyJuYmYiOjE3MjE5NTc4MDQsImV4cCI6MTcyMjU2MjYwNCwiand0X2lkZSI6ImFIZk1VTjRhanFDZnZEOGIiLCJkYXRhIjp7InVzZXJfaWQiOjEyfX0.RobEm_KWVEkKsjpK5EAvib82Y7rsnGHLhXrKfhEFcDQ';
         try {
             $res = Jwt::Check($token);
+        } catch (\Exception $e) {
+            echo json_encode(['error_msg' => $e->getMessage()]);
+        }
+        print_r($res);
+        exit;
+    }
+
+    // 权限认证
+    public function parse()
+    {
+        $res = '';
+        $token = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiIsImtpZCI6ImFIZk1VTjRhanFDZnZEOGIifQ.eyJuYmYiOjE3MjE5NTc4MDQsImV4cCI6MTcyMjU2MjYwNCwiand0X2lkZSI6ImFIZk1VTjRhanFDZnZEOGIiLCJkYXRhIjp7InVzZXJfaWQiOjEyfX0.RobEm_KWVEkKsjpK5EAvib82Y7rsnGHLhXrKfhEFcDQ';
+        try {
+            $res = Jwt::Parse($token, 1);
         } catch (\Exception $e) {
             echo json_encode(['error_msg' => $e->getMessage()]);
         }
@@ -99,7 +113,7 @@ class McjController {
     public function refresh()
     {
         $res = '';
-        $token = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiIsImtpZCI6IlFzMkdJaVRnVldSVUZSV3MifQ.eyJuYmYiOjE1MzQyMzQyNDksImV4cCI6MTUzNDgzOTA0OSwiand0X2lkZSI6IlFzMkdJaVRnVldSVUZSV3MiLCJkYXRhIjp7InVzZXJfaWQiOjEyfX0.pond6EJ59yH9k3MJusVugg7W6hHx1Y_lLGawJBctflY';
+        $token = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiIsImtpZCI6ImFIZk1VTjRhanFDZnZEOGIifQ.eyJuYmYiOjE3MjE5NTc4MDQsImV4cCI6MTcyMjU2MjYwNCwiand0X2lkZSI6ImFIZk1VTjRhanFDZnZEOGIiLCJkYXRhIjp7InVzZXJfaWQiOjEyfX0.RobEm_KWVEkKsjpK5EAvib82Y7rsnGHLhXrKfhEFcDQ';
         try {
             $res = Jwt::Refresh($token);
         } catch (\Exception $e) {
@@ -112,7 +126,7 @@ class McjController {
     // 注销令牌,账号登出
     public function logout()
     {
-        $token = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiIsImtpZCI6IlFzMkdJaVRnVldSVUZSV3MifQ.eyJuYmYiOjE1MzQyMzQyNDksImV4cCI6MTUzNDgzOTA0OSwiand0X2lkZSI6IlFzMkdJaVRnVldSVUZSV3MiLCJkYXRhIjp7InVzZXJfaWQiOjEyfX0.pond6EJ59yH9k3MJusVugg7W6hHx1Y_lLGawJBctflY';
+        $token = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiIsImtpZCI6ImFIZk1VTjRhanFDZnZEOGIifQ.eyJuYmYiOjE3MjE5NTc4MDQsImV4cCI6MTcyMjU2MjYwNCwiand0X2lkZSI6ImFIZk1VTjRhanFDZnZEOGIiLCJkYXRhIjp7InVzZXJfaWQiOjEyfX0.RobEm_KWVEkKsjpK5EAvib82Y7rsnGHLhXrKfhEFcDQ';
         try {
             Jwt::Logout($token);
         } catch (\Exception $e) {
