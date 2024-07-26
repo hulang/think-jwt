@@ -216,18 +216,42 @@ class Jwt
     }
 
     /**
-     * 获取请求头HTTP_AUTHORIZATION字段的token值
-     * @return mixed|string
+     * 从请求中获取授权令牌
+     * 
+     * 此方法旨在从HTTP请求的Authorization头部获取Bearer令牌
+     * 如果请求中没有直接包含Authorization头部,则尝试从备用头部中获取令牌
+     * 这种方法常用于API认证过程中,提取令牌以验证请求的合法性
+     * 
+     * @param  Request $request 请求对象,包含HTTP请求的所有信息
+     * @return mixed|string 返回提取的令牌,如果无法提取则返回空字符串
      */
-    public function getRequestToken()
+    public function getRequestToken($request)
     {
-        if (empty($_SERVER['HTTP_AUTHORIZATION'])) {
-            return '';
-        }
-        $header = $_SERVER['HTTP_AUTHORIZATION'];
+        // 尝试从请求的Authorization头部获取令牌
+        $authorization = $request->header('authorization') ?: $this->getFromAltHeaders($request);
+        // 定义默认的令牌类型为Bearer
         $method = 'bearer';
-        //去除token中可能存在的bearer标识
-        return trim(str_ireplace($method, '', $header));
+        // 移除令牌类型标识(如Bearer),并返回清理后的令牌值
+        // 去除token中可能存在的bearer标识
+        return trim(str_ireplace($method, '', $authorization));
+    }
+
+    /**
+     * 从请求的备用头部中获取认证信息
+     * 
+     * 此方法旨在获取请求中的认证信息,首先尝试从'HTTP_AUTHORIZATION'头部获取
+     * 如果不存在,则尝试从'REDIRECT_HTTP_AUTHORIZATION'头部获取
+     * 这种做法是因为在某些环境下,认证信息可能不会直接包含在请求的头部中
+     * 而是被重定向过程中的服务器端逻辑移动到了备用头部
+     * 
+     * @param Request $request 请求对象,用于访问请求头部信息
+     * @return mixed|string 返回获取到的认证信息,如果都不存在则返回空字符串
+     */
+    protected function getFromAltHeaders(Request $request)
+    {
+        // 尝试从'HTTP_AUTHORIZATION'头部获取认证信息,如果不存在则使用默认值''
+        $result = $request->header('HTTP_AUTHORIZATION') ?: $request->header('REDIRECT_HTTP_AUTHORIZATION');
+        return $result;
     }
 
     /**
