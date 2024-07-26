@@ -30,12 +30,13 @@ declare(strict_types=1);
 
 return [
     // 加密秘钥
-    'secret' => env('JWT_SECRET'),
+    'secret' => '20240726@hulang',
     // 过期时间,单位秒 默认 10 小时
     'exp' => (60 * 60) * 10,
     // 刷新时间,单位秒 默认 7 天
     'refresh' => ((60 * 60) * 24) * 7,
 ];
+
 
 ```
 #### 使用案例
