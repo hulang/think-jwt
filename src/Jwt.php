@@ -45,7 +45,7 @@ class Jwt
      * 获取token
      * 该方法用于生成包含特定数据的JWT(JSON Web Token)
      * @param array $data 数据负载,即将被编码进JWT的数据部分
-     * @return mixed|string 生成的JWT字符串,如果发生错误则抛出异常
+     * @return mixed|string|Exception 生成的JWT字符串,如果发生错误则抛出异常
      */
     public function getToken($data = [])
     {
@@ -80,7 +80,7 @@ class Jwt
      * 如果令牌有效,則会将其转换为数组形式并返回
      * 
      * @param string $token 待验证的令牌字符串.默认为空,表示使用默认的令牌
-     * @return mixed|array 如果令牌有效,返回解析后的令牌数据(转换为数组形式);否则,抛出异常
+     * @return mixed|array|Exception 如果令牌有效,返回解析后的令牌数据(转换为数组形式);否则,抛出异常
      * @throws \Exception 如果令牌过期,则抛出异常,异常信息包括“token过期需要刷新”,并附带特定错误码
      */
     public function Check($token = '')
