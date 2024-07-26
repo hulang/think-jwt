@@ -216,6 +216,32 @@ class Jwt
     }
 
     /**
+     * 获取请求头中的Authorization字段,用于提取token
+     * 
+     * 此方法主要用于从HTTP请求头的Authorization字段中提取token
+     * 它首先检查是否存在HTTP_AUTHORIZATION环境变量,如果存在,则从中提取token
+     * Authorization字段的格式通常为"Bearer <token>",此方法将移除"Bearer "部分,返回token值
+     * 如果Authorization字段不存在,则返回空字符串
+     * 
+     * @return mixed|string 返回提取的token值,如果不存在则返回空字符串
+     */
+    public function getRequestHeaders()
+    {
+        // 检查HTTP_AUTHORIZATION环境变量是否存在
+        if (empty($_SERVER['HTTP_AUTHORIZATION'])) {
+            return '';
+        }
+        // 获取Authorization字段的值
+        $header = $_SERVER['HTTP_AUTHORIZATION'];
+        // 默认使用bearer作为token的类型
+        $method = 'bearer';
+        // 移除"bearer "部分,提取token值
+        $result = trim(str_ireplace($method, '', $header));
+        // 返回提取的token值
+        return $result;
+    }
+
+    /**
      * 从请求中获取授权令牌
      * 
      * 此方法旨在从HTTP请求的Authorization头部获取Bearer令牌
@@ -233,7 +259,8 @@ class Jwt
         $method = 'bearer';
         // 移除令牌类型标识(如Bearer),并返回清理后的令牌值
         // 去除token中可能存在的bearer标识
-        return trim(str_ireplace($method, '', $authorization));
+        $$result = trim(str_ireplace($method, '', $authorization));
+        return $$result;
     }
 
     /**
