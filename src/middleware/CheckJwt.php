@@ -22,14 +22,17 @@ class CheckJwt
      */
     public function handle($request, \Closure $next)
     {
+        $data = [];
         try {
-            $dt = Jwt::getRequestToken($request);
-            if (empty($dt)) {
+            $token = Jwt::getRequestToken($request);
+            if (empty($token)) {
                 throw new \Exception('Authorization没有设置');
             }
+            $data = Jwt::Parse($token);
         } catch (\Exception $e) {
             return json(['code' => 0, 'msg' => $e->getMessage(), 'data' => null]);
         }
+        $request->user = $data;
         return $next($request);
     }
 }
