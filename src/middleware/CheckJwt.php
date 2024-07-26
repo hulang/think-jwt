@@ -23,7 +23,7 @@ class CheckJwt
     public function handle($request, \Closure $next)
     {
         try {
-            $dt = Jwt::getRequestToken();
+            $dt = Jwt::getRequestToken($request);
             if (empty($dt)) {
                 throw new \Exception('Authorization没有设置');
             }
