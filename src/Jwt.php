@@ -127,7 +127,7 @@ class Jwt
             // 基于令牌数据生成并返回新令牌
             $data = $this->getToken($arr['data']);
             $json['code'] = 1;
-            $json['msg'] = '';
+            $json['msg'] = '刷新令牌成功';
             $json['data'] = $data;
         } catch (\Exception $e) {
             $json['msg'] = $e->getMessage();
@@ -156,7 +156,7 @@ class Jwt
             // 将旧令牌标识加入黑名单,防止重复使用
             $this->AddBlacklist($arr['jwt_ide']);
             $json['code'] = 1;
-            $json['data'] = $arr;
+            $json['msg'] = '注销令牌成功';
         } catch (\Exception $e) {
             $json['msg'] = $e->getMessage();
         }
