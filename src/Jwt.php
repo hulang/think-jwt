@@ -14,6 +14,7 @@ use UnexpectedValueException;
 
 class Jwt
 {
+    protected $cfg = [];
     protected $secret = '';
     protected $exp = 3600; //一小时
     protected $refresh = 604800; //七天
@@ -31,21 +32,22 @@ class Jwt
      */
     public function __construct()
     {
-        $this->secret = config('jwt.secret') ? config('jwt.secret') : '';
+        $this->cfg = config('jwt');
+        $this->secret = !empty($this->cfg['secret']) ? $this->cfg['secret'] : '';
         if ($this->secret == '') {
             throw new \Exception('未设置jwt秘钥', self::JWT_SECRET_MISS);
         }
-        $this->exp = config('jwt.exp') ? config('jwt.exp') : 3600;
-        $this->refresh = config('jwt.refresh') ? config('jwt.refresh') : 604800;
+        $this->exp = !empty($this->cfg['exp']) ? intval($this->cfg['exp']) : (60 * 60) * 10;
+        $this->refresh = !empty($this->cfg['refresh']) ? intval($this->cfg['refresh']) : ((60 * 60) * 24) * 7;
     }
 
     /**
      * 获取token
      * 该方法用于生成包含特定数据的JWT(JSON Web Token)
-     * @param $data 数据负载,即将被编码进JWT的数据部分
+     * @param array $data 数据负载,即将被编码进JWT的数据部分
      * @return mixed|string 生成的JWT字符串,如果发生错误则抛出异常
      */
-    public function getToken($data)
+    public function getToken($data = [])
     {
         // 获取当前时间,用于设置JWT的生效时间和过期时间
         $invali_time = time();
@@ -65,7 +67,7 @@ class Jwt
             return \Firebase\JWT\JWT::encode($payload, $this->secret, 'HS256', $keyId);
         } catch (\Exception $e) {
             // 如果在生成JWT的过程中发生错误,抛出一个自定义的异常
-            throw new \Exception('数据加密出错', self::ENCRYPT_EORROR);
+            throw new \Exception($e->getMessage(), self::ENCRYPT_EORROR);
         }
     }
 
@@ -120,7 +122,7 @@ class Jwt
      * @param string $token 待注销的令牌字符串
      * @return mixed|bool 成功注销返回true,过程中发生错误则返回错误信息
      */
-    public function Logout($token)
+    public function Logout($token = '')
     {
         // 解析令牌,获取令牌中的标识信息
         $token_obj = $this->Parse($token);
@@ -141,7 +143,7 @@ class Jwt
      * 
      * @throws Exception 如果JWT秘钥未设置、令牌格式异常、签名无效、令牌过期或令牌在黑名单中,则抛出相应的异常
      */
-    public function Parse($token)
+    public function Parse($token = '')
     {
         try {
             // 使用JWT库解码令牌,检查是否设置了秘钥
@@ -183,7 +185,7 @@ class Jwt
      * @param string $jwt_ide JWT标识符,用于在黑名单中进行查找
      * @return mixed|bool 如果JWT标识存在于黑名单中,则返回true;否则返回false
      */
-    protected function InBlacklist($jwt_ide)
+    protected function InBlacklist($jwt_ide = '')
     {
         // 构建缓存键名,前缀为'jwt_ide_',后缀为JWT标识符
         $key = 'jwt_ide_' . $jwt_ide;
@@ -203,7 +205,7 @@ class Jwt
      * @param string $jwt_ide JWT标识符,用于唯一标识一个令牌
      * @return mixed|bool 如果添加成功,返回true;否则返回错误信息
      */
-    protected function AddBlacklist($jwt_ide)
+    protected function AddBlacklist($jwt_ide = '')
     {
         // 构建缓存键名,以JWT标识为键,添加到黑名单缓存中
         $key = 'jwt_ide_' . $jwt_ide;
@@ -243,7 +245,7 @@ class Jwt
      * 这个函数递归处理对象中的所有属性,确保所有属性都被转换为数组形式
      * 如果属性是对象或数组,则递归调用自身进行转换,直到所有元素都是基本类型
      * 
-     * @param mixed $obj 要转换的对象或数组
+     * @param mixed|object|array $obj 要转换的对象或数组
      * @return mixed|array 转换后的数组
      */
     public function objectToArray($obj)
