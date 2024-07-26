@@ -56,8 +56,8 @@ class Jwt
         $keyId = $this->Random();
         // 定义JWT的载荷,包含生效时间、过期时间、JWT标识和数据
         $payload = [
-            'nbf' => $invali_time, // Not Before,指定JWT在什么时间之后才有效
-            'exp' => $expire_time, // Expiration Time,指定JWT在什么时间之后失效
+            'nbf' => $invali_time, // 生效时间
+            'exp' => $expire_time, // 过期时间
             'jwt_ide' => $keyId, // 为JWT分配一个唯一的标识
             'data' => $data, // 包含需要传递的数据
         ];
@@ -139,12 +139,14 @@ class Jwt
      * 如果令牌解码或验证失败,将抛出相应的异常
      * 
      * @param string $token 待解析的JWT令牌
+     * @param int $type 返回类型,0为用户数组,1为存储数据,默认为0
      * @return mixed|array|Exception 解码后的JWT对象,如果失败则抛出异常
      * 
      * @throws Exception 如果JWT秘钥未设置、令牌格式异常、签名无效、令牌过期或令牌在黑名单中,则抛出相应的异常
      */
-    public function Parse($token = '')
+    public function Parse($token = '', $type = 0)
     {
+        $result = [];
         try {
             // 使用JWT库解码令牌,检查是否设置了秘钥
             $token_obj = \Firebase\JWT\JWT::decode($token, new Key($this->secret, 'HS256'));
@@ -173,7 +175,13 @@ class Jwt
             throw new \Exception('token已被注销', self::TOKEN_LOGOUT);
         }
         // 返回解码并验证通过的令牌对象
-        return $token_obj;
+        if ($token_obj != null) {
+            $result = $this->objectToArray($token_obj);
+            if ($type == 0) {
+                $result = $this->objectToArray($token_obj)['data'];
+            }
+        }
+        return $result;
     }
 
     /**
