@@ -80,19 +80,28 @@ class Jwt
      * 如果令牌有效,則会将其转换为数组形式并返回
      * 
      * @param string $token 待验证的令牌字符串.默认为空,表示使用默认的令牌
-     * @return mixed|array|Exception 如果令牌有效,返回解析后的令牌数据(转换为数组形式);否则,抛出异常
+     * @return mixed|array 如果令牌有效,返回解析后的令牌数据(转换为数组形式);否则,抛出异常
      * @throws \Exception 如果令牌过期,则抛出异常,异常信息包括“token过期需要刷新”,并附带特定错误码
      */
     public function Check($token = '')
     {
-        // 解析令牌,获取令牌中的信息对象
-        $token_obj = $this->Parse($token);
-        // 检查令牌的生效时间是否在当前时间之前,如果令牌尚未生效或已经过期,则抛出异常
-        if ($token_obj->nbf - time() >= $this->exp) {
-            throw new \Exception('token过期需要刷新', self::TOKEN_EXPIRE);
+        $json = [];
+        $json['code'] = 0;
+        $json['msg'] = '';
+        $json['data'] = '';
+        try {
+            // 解析传入的令牌,获取令牌中的数据和标识
+            $arr = $this->Parse($token, 1);
+            // 检查令牌的生效时间是否在当前时间之前,如果令牌尚未生效或已经过期,则抛出异常
+            if ($arr['nbf'] - time() >= $this->exp) {
+                throw new \Exception('token过期需要刷新', self::TOKEN_EXPIRE);
+            }
+            $json['code'] = 1;
+            $json['data'] = $arr;
+        } catch (\Exception $e) {
+            $json['msg'] = $e->getMessage();
         }
-        // 令牌有效,将令牌信息对象转换为数组形式并返回
-        return $this->objectToArray($token_obj);
+        return $json;
     }
 
     /**
@@ -101,16 +110,28 @@ class Jwt
      * 它首先解析传入的令牌,将旧令牌加入黑名单,然后基于解析出的数据生成一个新的令牌
      * 
      * @param string $token 待刷新的令牌,默认为空.如果为空,函数可能需要从其他来源获取令牌
-     * @return mixed|string 返回新的令牌字符串.如果操作失败,可能返回其他类型的数据,具体取决于实现
+     * @return mixed|array 返回新的令牌字符串.如果操作失败,可能返回其他类型的数据,具体取决于实现
      */
     public function Refresh($token = '')
     {
-        // 解析传入的令牌,获取令牌中的数据和标识
-        $token_obj = $this->Parse($token);
-        // 将旧令牌标识加入黑名单,防止重复使用
-        $this->AddBlacklist($token_obj->jwt_ide);
-        // 基于令牌数据生成并返回新令牌
-        return $this->getToken($token_obj->data);
+        $json = [];
+        $json['code'] = 0;
+        $json['msg'] = '';
+        $json['data'] = '';
+        try {
+            // 解析传入的令牌,获取令牌中的数据和标识
+            $arr = $this->Parse($token, 1);
+            // 将旧令牌标识加入黑名单,防止重复使用
+            $this->AddBlacklist($arr['jwt_ide']);
+            // 基于令牌数据生成并返回新令牌
+            $data = $this->getToken($arr['data']);
+            $json['code'] = 1;
+            $json['msg'] = '';
+            $json['data'] = $data;
+        } catch (\Exception $e) {
+            $json['msg'] = $e->getMessage();
+        }
+        return $json;
     }
 
     /**
@@ -120,16 +141,25 @@ class Jwt
      * 它通过解析令牌,然后将该令牌添加到黑名单中,以阻止该令牌未来的使用
      * 
      * @param string $token 待注销的令牌字符串
-     * @return mixed|bool 成功注销返回true,过程中发生错误则返回错误信息
+     * @return mixed|array 成功注销返回true,过程中发生错误则返回错误信息
      */
     public function Logout($token = '')
     {
-        // 解析令牌,获取令牌中的标识信息
-        $token_obj = $this->Parse($token);
-        // 将解析出的令牌标识添加到黑名单中
-        $this->AddBlacklist($token_obj->jwt_ide);
-        // 注销成功,返回true
-        return true;
+        $json = [];
+        $json['code'] = 0;
+        $json['msg'] = '';
+        $json['data'] = '';
+        try {
+            // 解析传入的令牌,获取令牌中的数据和标识
+            $arr = $this->Parse($token, 1);
+            // 将旧令牌标识加入黑名单,防止重复使用
+            $this->AddBlacklist($arr['jwt_ide']);
+            $json['code'] = 1;
+            $json['data'] = $arr;
+        } catch (\Exception $e) {
+            $json['msg'] = $e->getMessage();
+        }
+        return $json;
     }
 
     /**
