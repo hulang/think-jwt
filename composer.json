@@ -1,10 +1,10 @@
 {
     "name": "hulang/think-jwt",
-    "description": "基于firebase/php-jwt 6.10的ThinkPHP 8.0+ Jwt 验证",
+    "description": "基于firebase php-jwt 6.10的ThinkPHP 8.0+ Jwt 验证",
     "keywords": [
         "auth",
         "authentication",
-        "firebase/php-jwt",
+        "php-jwt",
         "jwt",
         "thinkphp"
     ],
