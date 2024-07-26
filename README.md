@@ -85,7 +85,7 @@ class McjController {
     public function check()
     {
         $res = '';
-        $token = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiIsImtpZCI6ImFIZk1VTjRhanFDZnZEOGIifQ.eyJuYmYiOjE3MjE5NTc4MDQsImV4cCI6MTcyMjU2MjYwNCwiand0X2lkZSI6ImFIZk1VTjRhanFDZnZEOGIiLCJkYXRhIjp7InVzZXJfaWQiOjEyfX0.RobEm_KWVEkKsjpK5EAvib82Y7rsnGHLhXrKfhEFcDQ';
+        $token = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiIsImtpZCI6IlNmenFKV3BtdTQ0dkdQZmwifQ.eyJuYmYiOjE3MjE5NTgyMDMsImV4cCI6MTcyMjU2MzAwMywiand0X2lkZSI6IlNmenFKV3BtdTQ0dkdQZmwiLCJkYXRhIjp7InVzZXJfaWQiOjEyfX0.qrj4VIqA0OaIgF6wmjwlQOwEfOFb3ZiIZCE9yWXfSgc';
         try {
             $res = Jwt::Check($token);
         } catch (\Exception $e) {
@@ -99,7 +99,7 @@ class McjController {
     public function parse()
     {
         $res = '';
-        $token = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiIsImtpZCI6ImFIZk1VTjRhanFDZnZEOGIifQ.eyJuYmYiOjE3MjE5NTc4MDQsImV4cCI6MTcyMjU2MjYwNCwiand0X2lkZSI6ImFIZk1VTjRhanFDZnZEOGIiLCJkYXRhIjp7InVzZXJfaWQiOjEyfX0.RobEm_KWVEkKsjpK5EAvib82Y7rsnGHLhXrKfhEFcDQ';
+        $token = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiIsImtpZCI6IlNmenFKV3BtdTQ0dkdQZmwifQ.eyJuYmYiOjE3MjE5NTgyMDMsImV4cCI6MTcyMjU2MzAwMywiand0X2lkZSI6IlNmenFKV3BtdTQ0dkdQZmwiLCJkYXRhIjp7InVzZXJfaWQiOjEyfX0.qrj4VIqA0OaIgF6wmjwlQOwEfOFb3ZiIZCE9yWXfSgc';
         try {
             $res = Jwt::Parse($token, 1);
         } catch (\Exception $e) {
@@ -112,8 +112,8 @@ class McjController {
     // 刷新令牌
     public function refresh()
     {
-        $res = '';
-        $token = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiIsImtpZCI6ImFIZk1VTjRhanFDZnZEOGIifQ.eyJuYmYiOjE3MjE5NTc4MDQsImV4cCI6MTcyMjU2MjYwNCwiand0X2lkZSI6ImFIZk1VTjRhanFDZnZEOGIiLCJkYXRhIjp7InVzZXJfaWQiOjEyfX0.RobEm_KWVEkKsjpK5EAvib82Y7rsnGHLhXrKfhEFcDQ';
+        $res = [];
+        $token = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiIsImtpZCI6IlNmenFKV3BtdTQ0dkdQZmwifQ.eyJuYmYiOjE3MjE5NTgyMDMsImV4cCI6MTcyMjU2MzAwMywiand0X2lkZSI6IlNmenFKV3BtdTQ0dkdQZmwiLCJkYXRhIjp7InVzZXJfaWQiOjEyfX0.qrj4VIqA0OaIgF6wmjwlQOwEfOFb3ZiIZCE9yWXfSgc';
         try {
             $res = Jwt::Refresh($token);
         } catch (\Exception $e) {
@@ -126,13 +126,15 @@ class McjController {
     // 注销令牌,账号登出
     public function logout()
     {
-        $token = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiIsImtpZCI6ImFIZk1VTjRhanFDZnZEOGIifQ.eyJuYmYiOjE3MjE5NTc4MDQsImV4cCI6MTcyMjU2MjYwNCwiand0X2lkZSI6ImFIZk1VTjRhanFDZnZEOGIiLCJkYXRhIjp7InVzZXJfaWQiOjEyfX0.RobEm_KWVEkKsjpK5EAvib82Y7rsnGHLhXrKfhEFcDQ';
+        $res = [];
+        $token = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiIsImtpZCI6IlNmenFKV3BtdTQ0dkdQZmwifQ.eyJuYmYiOjE3MjE5NTgyMDMsImV4cCI6MTcyMjU2MzAwMywiand0X2lkZSI6IlNmenFKV3BtdTQ0dkdQZmwiLCJkYXRhIjp7InVzZXJfaWQiOjEyfX0.qrj4VIqA0OaIgF6wmjwlQOwEfOFb3ZiIZCE9yWXfSgc';
         try {
-            Jwt::Logout($token);
+            $res = Jwt::Logout($token);
         } catch (\Exception $e) {
             echo json_encode(['error_msg' => $e->getMessage()]);
         }
-        echo ('logout success');
+        print_r($res);
+        exit;
     }
 
 }
