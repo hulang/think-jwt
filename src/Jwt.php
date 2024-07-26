@@ -11,6 +11,7 @@ use Firebase\JWT\ExpiredException;
 use DomainException;
 use InvalidArgumentException;
 use UnexpectedValueException;
+use think\facade\Request;
 
 class Jwt
 {
@@ -212,6 +213,21 @@ class Jwt
             }
         }
         return $result;
+    }
+
+    /**
+     * 获取请求头HTTP_AUTHORIZATION字段的token值
+     * @return mixed|string
+     */
+    public function getRequestToken()
+    {
+        if (empty($_SERVER['HTTP_AUTHORIZATION'])) {
+            return '';
+        }
+        $header = $_SERVER['HTTP_AUTHORIZATION'];
+        $method = 'bearer';
+        //去除token中可能存在的bearer标识
+        return trim(str_ireplace($method, '', $header));
     }
 
     /**

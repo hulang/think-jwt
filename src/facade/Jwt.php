@@ -16,6 +16,7 @@ use think\Facade;
  * @method static mixed|array Refresh($token = '') 刷新令牌
  * @method static mixed|array Logout($token = '') 注销令牌
  * @method static mixed|array|Exception Parse($token = '', $type = 0) 解析并验证JWT令牌
+ * @method static mixed|string getRequestToken() 获取请求头HTTP_AUTHORIZATION字段的token值
  */
 class Jwt extends Facade
 {
