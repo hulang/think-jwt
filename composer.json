@@ -1,12 +1,13 @@
 {
     "name": "hulang/think-jwt",
-    "description": "基于firebase php-jwt 6.10的ThinkPHP 8.0+ Jwt 验证",
+    "description": "基于 firebase/php-jwt ^7.2 的 ThinkPHP 8.0+ JWT 验证,内置路由中间件",
     "keywords": [
         "auth",
         "authentication",
         "php-jwt",
         "jwt",
-        "thinkphp"
+        "thinkphp",
+        "middleware"
     ],
     "license": "Apache-2.0",
     "authors": [

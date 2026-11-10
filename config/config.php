@@ -7,10 +7,23 @@ declare(strict_types=1);
 // +----------------------------------------------------------------------
 
 return [
-    // 加密秘钥
+    // 加密秘钥,上线务必改掉并放在 .env 里
+    // 写短字符串也能用:类初始化时会把 secret 统一做一次 SHA-256 派生,转成 32 字节密钥,
+    // 满足 firebase/php-jwt 7.x 对 HS256 的长度要求
     'secret' => '20240726@hulang',
+
     // 过期时间,单位秒 默认 10 小时
+    // 含义是“签发后多久要求刷新”:到点后 Check() 返回 code=0、errno=20001,
+    // 前端拿旧 token 调 Refresh() 换新 token;token 本身要到 refresh 才真正失效
     'exp' => (60 * 60) * 10,
-    // 刷新时间,单位秒 默认 7 天
+
+    // 刷新时间,单位秒 默认 7 天(token 的实际有效期,对应 payload 里的 exp)
     'refresh' => ((60 * 60) * 24) * 7,
+
+    // 中间件放行白名单,支持 * 通配,例如 ['api/login', 'api/register', 'api/captcha/*']
+    'except' => [],
+
+    // 中间件默认是否允许匿名访问:
+    // false 表示没 token 直接 401;true 表示没 token 也放行,由控制器自行判断是否登录
+    'optional' => false,
 ];

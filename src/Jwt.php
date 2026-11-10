@@ -4,85 +4,150 @@ declare(strict_types=1);
 
 namespace think;
 
-use Firebase\JWT\Key;
-use Firebase\JWT\SignatureInvalidException;
-use Firebase\JWT\BeforeValidException;
-use Firebase\JWT\ExpiredException;
 use DomainException;
 use InvalidArgumentException;
 use UnexpectedValueException;
-use think\facade\Request;
+use Firebase\JWT\Key;
+use Firebase\JWT\BeforeValidException;
+use Firebase\JWT\ExpiredException;
+use Firebase\JWT\SignatureInvalidException;
 
+/**
+ * ThinkPHP 8.0+ Jwt 验证
+ *
+ * 基于 firebase/php-jwt ^7.2，提供 token 的签发、校验、刷新、注销，
+ * 以及黑名单（基于 cache）与请求头 token 提取能力。
+ *
+ * 两个时间参数的含义务必分清：
+ * - exp     ：签发后多久“要求刷新”，到点后 Check() 返回失败，前端应调 Refresh() 换新 token
+ * - refresh ：token 的实际有效期，也就是 payload 里 exp 的值
+ *
+ * @package think\Jwt
+ */
 class Jwt
 {
+    /** @var array 配置项，来自 config('jwt') */
     protected $cfg = [];
+
+    /** @var string 加密秘钥 */
     protected $secret = '';
-    protected $exp = 3600; //一小时
-    protected $refresh = 604800; //七天
+
+    /** @var int 签发后多久要求刷新（秒），默认 10 小时，可用参数名 exp 配置 */
+    protected $exp = 36000;
+
+    /** @var int token 实际有效期（秒），默认 7 天，对应 payload 的 exp */
+    protected $refresh = 604800;
+
     public const ENCRYPT_EORROR = 50001; //jwt加密算法运算时异常
     public const JWT_SECRET_MISS = 50002; //jwt加密秘钥值未设置
     public const INVALID_TOKEN = 40001; //token格式不正确不合法,异常的token
-    public const TOKEN_EXPIRE = 20001; //token过期,需要刷新
+    public const TOKEN_EMPTY = 40002; //请求没有携带token
+    public const TOKEN_EXPIRE = 20001; //token签发超过exp,需要刷新
     public const TOKEN_EXPIRE_LONG = 20002; //token过期,过期时间超过上限
     public const TOKEN_LOGOUT = 20003; //token已经被注销
-    public const TOKEN_DOMAIN = 20004; //token已经被注销
+    public const TOKEN_DOMAIN = 20004; //token签名算法或密钥不匹配
 
     /**
      * 根据配置文件设置相关参数
-     * @return $this
+     *
+     * @throws \Exception 秘钥未设置时抛出
      */
     public function __construct()
     {
-        $this->cfg = config('jwt');
-        $this->secret = !empty($this->cfg['secret']) ? $this->cfg['secret'] : '';
-        if ($this->secret == '') {
+        // config('jwt') 在配置未发布时返回 null，这里统一转成数组处理
+        $this->cfg = (array) config('jwt');
+
+        $this->secret = !empty($this->cfg['secret']) ? (string) $this->cfg['secret'] : '';
+        if ($this->secret === '') {
             throw new \Exception('未设置jwt秘钥', self::JWT_SECRET_MISS);
         }
-        $this->exp = !empty($this->cfg['exp']) ? intval($this->cfg['exp']) : (60 * 60) * 10;
-        $this->refresh = !empty($this->cfg['refresh']) ? intval($this->cfg['refresh']) : ((60 * 60) * 24) * 7;
+
+        // firebase/php-jwt 7.x 会校验 HMAC 密钥长度:HS256 要求至少 32 字节,
+        // 否则底层直接抛 "Provided key is too short"。
+        // 配置里的 secret 通常是一段普通字符串,这里无论长短统一过一遍 deriveKey() 转成 32 字节密钥
+        if ($this->secret !== '') {
+            $this->secret = $this->deriveKey($this->secret);
+        }
+
+        // exp：签发后多久要求刷新(不是token失效时间),默认 10 小时
+        $this->exp = !empty($this->cfg['exp']) ? (int) $this->cfg['exp'] : ((60 * 60) * 10);
+
+        // refresh：token 的实际有效期,默认 7 天
+        $this->refresh = !empty($this->cfg['refresh']) ? (int) $this->cfg['refresh'] : (((60 * 60) * 24) * 7);
+    }
+
+    /**
+     * 把配置里的秘钥字符串转换成 HS256 能用的密钥
+     *
+     * firebase/php-jwt 7.x 对 HMAC 密钥有长度校验:HS256 要求至少 32 字节(256 位),
+     * 配置里写一段普通短字符串(例如 15 个字符)会因为太短直接抛 "Provided key is too short",
+     * 所以这里统一做一次 SHA-256 派生,产出固定的 32 字节二进制密钥,配置里就不用写超长串了。
+     *
+     * 三点说明:
+     * - 派生结果是确定的,同一个 secret 每次都得到同一个密钥,签发与校验能正常互通
+     * - 不论配置里给的是长串还是短串,都统一派生一次,行为固定,不会因为换了密钥长度而变化
+     * - 派生只补足长度,不增加真实强度,生产环境仍建议直接配置 32 字节以上的随机串
+     *
+     * @param string $secret 配置里的原始秘钥字符串
+     * @return string 实际参与签名的密钥
+     */
+    protected function deriveKey(string $secret): string
+    {
+        // 第三个参数为 true 时返回 32 字节二进制串,正好满足 HS256 的 256 位要求
+        return hash('sha256', $secret, true);
     }
 
     /**
      * 获取token
      * 该方法用于生成包含特定数据的JWT(JSON Web Token)
+     *
      * @param array $data 数据负载,即将被编码进JWT的数据部分
-     * @return mixed|string|Exception 生成的JWT字符串,如果发生错误则抛出异常
+     * @return string 生成的JWT字符串
+     * @throws \Exception 生成失败时抛出,错误码 ENCRYPT_EORROR
      */
     public function getToken($data = [])
     {
         // 获取当前时间,用于设置JWT的生效时间和过期时间
-        $invali_time = time();
-        $expire_time = time() + $this->refresh;
-        // 生成一个随机的keyId,用于JWT的标识
+        $now = time();
+
+        // token 的实际失效时间 = 当前时间 + refresh
+        $expire_time = $now + $this->refresh;
+
+        // 生成一个随机标识,用于 JWT 的唯一 id 与黑名单
         $keyId = $this->Random();
-        // 定义JWT的载荷,包含生效时间、过期时间、JWT标识和数据
+
+        // 定义JWT的载荷,包含签发时间、生效时间、过期时间、JWT标识和数据
         $payload = [
-            'nbf' => $invali_time, // 生效时间
-            'exp' => $expire_time, // 过期时间
-            'jwt_ide' => $keyId, // 为JWT分配一个唯一的标识
+            'iat' => $now, // 签发时间,标准字段
+            'nbf' => $now, // 生效时间
+            'exp' => $expire_time, // 失效时间
+            'jwt_ide' => $keyId, // 为JWT分配一个唯一的标识,注销时写黑名单用
             'data' => $data, // 包含需要传递的数据
         ];
+
         try {
-            // 使用JWT库的encode方法生成令牌,同时指定载荷、秘钥和算法
-            // 还包括了JWT的keyId,用于标识这个JWT
+            // 使用JWT库的encode方法生成令牌,同时指定载荷、秘钥、算法和密钥标识
             return \Firebase\JWT\JWT::encode($payload, $this->secret, 'HS256', $keyId);
-        } catch (\Exception $e) {
-            // 如果在生成JWT的过程中发生错误,抛出一个自定义的异常
-            throw new \Exception($e->getMessage(), self::ENCRYPT_EORROR);
+        } catch (\Throwable $e) {
+            // 生成过程出错统一转成自定义错误码,方便调用方识别
+            throw new \Exception('生成令牌失败:' . $e->getMessage(), self::ENCRYPT_EORROR);
         }
     }
 
     /**
      * 验证令牌(Token)的有效性
-     * 
-     * 本函数主要用于通过令牌验证用户身份或访问权限
-     * 它首先会对传入的令牌进行解析,然后检查令牌的生效时间是否在当前时间之前
-     * 如果令牌尚未生效或已经过期,将会抛出异常
-     * 如果令牌有效,則会将其转换为数组形式并返回
-     * 
-     * @param string $token 待验证的令牌字符串.默认为空,表示使用默认的令牌
-     * @return mixed|array 如果令牌有效,返回解析后的令牌数据(转换为数组形式);否则,抛出异常
-     * @throws \Exception 如果令牌过期,则抛出异常,异常信息包括“token过期需要刷新”,并附带特定错误码
+     *
+     * 先解析令牌(会做签名、生效时间、失效时间、黑名单校验),
+     * 再判断签发时间是否已经超过 exp,超过则提示“需要刷新”。
+     *
+     * 返回结构固定为 code / msg / data / errno 四个键:
+     * - code  1 表示通过,0 表示失败
+     * - msg   失败原因
+     * - data  通过时是业务数据,失败时是空字符串
+     * - errno 失败时的业务错误码(对应类里的常量),通过时为 0
+     *
+     * @param string $token 待验证的令牌字符串
+     * @return array 校验结果
      */
     public function Check($token = '')
     {
@@ -90,18 +155,34 @@ class Jwt
         $json['code'] = 0;
         $json['msg'] = '';
         $json['data'] = '';
+        $json['errno'] = 0;
+
+        // 没传 token 时直接返回,避免拿空串去解码
+        if ($token === '' || $token === null) {
+            $json['msg'] = '缺少token';
+            $json['errno'] = self::TOKEN_EMPTY;
+            return $json;
+        }
+
         try {
             // 解析传入的令牌,获取令牌中的数据和标识
             $arr = $this->Parse($token, 1);
-            // 检查令牌的生效时间是否在当前时间之前,如果令牌尚未生效或已经过期,则抛出异常
-            if ($arr['nbf'] - time() >= $this->exp) {
+
+            // 签发时间优先取标准字段 iat,老 token 没有 iat 时退回 nbf
+            $issuedAt = (int) ($arr['iat'] ?? $arr['nbf'] ?? 0);
+
+            // 判断是否已经超过刷新窗口:是“当前时间 - 签发时间”,不是“签发时间 - 当前时间”
+            if ($issuedAt > 0 && (time() - $issuedAt) >= $this->exp) {
                 throw new \Exception('token过期需要刷新', self::TOKEN_EXPIRE);
             }
+
             $json['code'] = 1;
-            $json['data'] = $arr['data'];
+            $json['data'] = $arr['data'] ?? [];
         } catch (\Exception $e) {
             $json['msg'] = $e->getMessage();
+            $json['errno'] = (int) $e->getCode();
         }
+
         return $json;
     }
 
@@ -109,9 +190,9 @@ class Jwt
      * 刷新令牌
      * 本函数用于刷新已经过期或即将过期的令牌
      * 它首先解析传入的令牌,将旧令牌加入黑名单,然后基于解析出的数据生成一个新的令牌
-     * 
-     * @param string $token 待刷新的令牌,默认为空.如果为空,函数可能需要从其他来源获取令牌
-     * @return mixed|array 返回新的令牌字符串.如果操作失败,可能返回其他类型的数据,具体取决于实现
+     *
+     * @param string $token 待刷新的令牌
+     * @return array 刷新结果,code=1 时 data 是新 token
      */
     public function Refresh($token = '')
     {
@@ -119,30 +200,39 @@ class Jwt
         $json['code'] = 0;
         $json['msg'] = '';
         $json['data'] = '';
+        $json['errno'] = 0;
+
         try {
             // 解析传入的令牌,获取令牌中的数据和标识
             $arr = $this->Parse($token, 1);
-            // 将旧令牌标识加入黑名单,防止重复使用
-            $this->AddBlacklist($arr['jwt_ide']);
-            // 基于令牌数据生成并返回新令牌
-            $data = $this->getToken($arr['data']);
+
+            // 没有唯一标识就无法写黑名单,这种 token 不允许刷新
+            if (empty($arr['jwt_ide'])) {
+                throw new \Exception('token缺少唯一标识', self::INVALID_TOKEN);
+            }
+
+            // 将旧令牌标识加入黑名单,防止同一个旧 token 被重复使用
+            $this->AddBlacklist((string) $arr['jwt_ide']);
+
+            // 基于令牌里的业务数据生成并返回新令牌
+            $data = $this->getToken($arr['data'] ?? []);
             $json['code'] = 1;
             $json['msg'] = '刷新令牌成功';
             $json['data'] = $data;
         } catch (\Exception $e) {
             $json['msg'] = $e->getMessage();
+            $json['errno'] = (int) $e->getCode();
         }
+
         return $json;
     }
 
     /**
      * 注销令牌
-     * 
-     * 本函数用于标记一个令牌为无效,实现令牌的注销功能
-     * 它通过解析令牌,然后将该令牌添加到黑名单中,以阻止该令牌未来的使用
-     * 
+     * 通过解析令牌,然后把该令牌的唯一标识写入黑名单,阻止它之后继续使用
+     *
      * @param string $token 待注销的令牌字符串
-     * @return mixed|array 成功注销返回true,过程中发生错误则返回错误信息
+     * @return array 注销结果,code=1 表示成功
      */
     public function Logout($token = '')
     {
@@ -150,80 +240,94 @@ class Jwt
         $json['code'] = 0;
         $json['msg'] = '';
         $json['data'] = '';
+        $json['errno'] = 0;
+
         try {
-            // 解析传入的令牌,获取令牌中的数据和标识
+            // 解析传入的令牌,获取令牌中的数据
             $arr = $this->Parse($token, 1);
-            // 将旧令牌标识加入黑名单,防止重复使用
-            $this->AddBlacklist($arr['jwt_ide']);
+
+            if (empty($arr['jwt_ide'])) {
+                throw new \Exception('token缺少唯一标识', self::INVALID_TOKEN);
+            }
+
+            // 将令牌标识加入黑名单,有效期与 token 本身一致
+            $this->AddBlacklist((string) $arr['jwt_ide']);
             $json['code'] = 1;
             $json['msg'] = '注销令牌成功';
         } catch (\Exception $e) {
             $json['msg'] = $e->getMessage();
+            $json['errno'] = (int) $e->getCode();
         }
+
         return $json;
     }
 
     /**
      * 解析并验证JWT令牌
-     * 
-     * 该方法尝试解码给定的JWT令牌,并进行一系列验证
-     * 如果令牌解码或验证失败,将抛出相应的异常
-     * 
+     *
+     * 依次做签名校验、生效时间校验、失效时间校验,再查黑名单。
+     * 注意异常捕获顺序:firebase 的 ExpiredException、BeforeValidException、
+     * SignatureInvalidException 都继承自 UnexpectedValueException,
+     * 所以子类必须写在父类前面,否则会被父类一口吞掉,永远命中不到。
+     *
      * @param string $token 待解析的JWT令牌
-     * @param int $type 返回类型,0为用户数组,1为存储数据,默认为0
-     * @return mixed|array|Exception 解码后的JWT对象,如果失败则抛出异常
-     * 
-     * @throws Exception 如果JWT秘钥未设置、令牌格式异常、签名无效、令牌过期或令牌在黑名单中,则抛出相应的异常
+     * @param int $type 返回类型,0为用户业务数据,1为完整载荷,默认为0
+     * @return array 解码后的数据
+     * @throws \Exception 秘钥未设置、格式异常、签名无效、尚未生效、已过期或已注销时抛出
      */
     public function Parse($token = '', $type = 0)
     {
-        $result = [];
-        try {
-            // 使用JWT库解码令牌,检查是否设置了秘钥
-            $token_obj = \Firebase\JWT\JWT::decode($token, new Key($this->secret, 'HS256'));
-        } catch (InvalidArgumentException $e) {
-            // 抛出异常:秘钥未设置
-            throw new \Exception('未设置jwt秘钥', self::JWT_SECRET_MISS);
-        } catch (UnexpectedValueException $e) {
-            // 抛出异常:令牌格式异常
-            throw new \Exception('令牌格式异常:' . $e->getMessage(), self::INVALID_TOKEN);
-        } catch (SignatureInvalidException $e) {
-            // 抛出异常:签名无效
-            throw new \Exception('签名无效:' . $e->getMessage(), self::INVALID_TOKEN);
-        } catch (BeforeValidException $e) {
-            // 抛出异常:令牌尚未生效
-            throw new \Exception('令牌尚未生效:' . $e->getMessage(), self::INVALID_TOKEN);
-        } catch (ExpiredException $e) {
-            // 抛出异常:令牌已过期
-            throw new \Exception('令牌已过期:' . $e->getMessage(), self::TOKEN_EXPIRE_LONG);
-        } catch (DomainException $e) {
-            // 抛出异常:域名失效
-            throw new \Exception('域名失效:' . $e->getMessage(), self::TOKEN_DOMAIN);
+        // 空 token 直接拒绝,避免底层库抛出难以理解的异常
+        if ($token === '' || $token === null) {
+            throw new \Exception('缺少token', self::TOKEN_EMPTY);
         }
-        // 检查解码后的令牌是否在黑名单中
-        if ($this->InBlacklist($token_obj->jwt_ide) === true) {
-            // 抛出异常:令牌已被注销
+
+        try {
+            // 使用JWT库解码令牌,同时校验签名
+            $token_obj = \Firebase\JWT\JWT::decode($token, new Key($this->secret, 'HS256'));
+        } catch (ExpiredException $e) {
+            // 令牌已过期,超出 refresh 的有效期上限
+            throw new \Exception('令牌已过期:' . $e->getMessage(), self::TOKEN_EXPIRE_LONG);
+        } catch (BeforeValidException $e) {
+            // 令牌尚未生效(nbf 还在未来)
+            throw new \Exception('令牌尚未生效:' . $e->getMessage(), self::INVALID_TOKEN);
+        } catch (SignatureInvalidException $e) {
+            // 签名校验失败,可能被篡改
+            throw new \Exception('签名无效:' . $e->getMessage(), self::INVALID_TOKEN);
+        } catch (UnexpectedValueException $e) {
+            // 结构或字段异常,例如缺少必要字段、算法不支持
+            throw new \Exception('令牌格式异常:' . $e->getMessage(), self::INVALID_TOKEN);
+        } catch (InvalidArgumentException $e) {
+            // 秘钥或参数不合法
+            throw new \Exception('未设置jwt秘钥', self::JWT_SECRET_MISS);
+        } catch (DomainException $e) {
+            // 算法或密钥类型不匹配
+            throw new \Exception('签名算法或密钥不匹配:' . $e->getMessage(), self::TOKEN_DOMAIN);
+        }
+
+        // 检查解码后的令牌是否在黑名单中(已注销的 token 不允许再用)
+        $jwtIde = (string) ($token_obj->jwt_ide ?? '');
+        if ($jwtIde !== '' && $this->InBlacklist($jwtIde) === true) {
             throw new \Exception('token已被注销', self::TOKEN_LOGOUT);
         }
-        // 返回解码并验证通过的令牌对象
-        if ($token_obj != null) {
-            $result = $this->objectToArray($token_obj);
-            if ($type == 0) {
-                $result = $this->objectToArray($token_obj)['data'];
-            }
+
+        $result = $this->objectToArray($token_obj);
+
+        // type=0 时只返回业务数据,type=1 时返回完整载荷
+        if ($type == 0) {
+            return $result['data'] ?? [];
         }
+
         return $result;
     }
 
     /**
      * 获取请求头中的Authorization字段,用于提取token
-     * 
-     * 此方法主要用于从HTTP请求头的Authorization字段中提取token
-     * 它首先检查是否存在HTTP_AUTHORIZATION环境变量,如果存在,则从中提取token
-     * Authorization字段的格式通常为"Bearer <token>",此方法将移除"Bearer "部分,返回token值
-     * 如果Authorization字段不存在,则返回空字符串
-     * 
-     * @return mixed|string 返回提取的token值,如果不存在则返回空字符串
+     *
+     * 从 $_SERVER 里取,适合没有 Request 对象的场景;
+     * 有 Request 对象时请优先用 getRequestToken($request)。
+     *
+     * @return string 提取到的token,不存在时返回空字符串
      */
     public function getRequestHeaders()
     {
@@ -231,140 +335,162 @@ class Jwt
         if (empty($_SERVER['HTTP_AUTHORIZATION'])) {
             return '';
         }
-        // 获取Authorization字段的值
-        $header = $_SERVER['HTTP_AUTHORIZATION'];
-        // 默认使用bearer作为token的类型
-        $method = 'bearer';
-        // 移除"bearer "部分,提取token值
-        $result = trim(str_ireplace($method, '', $header));
-        // 返回提取的token值
-        return $result;
+
+        return $this->parseTokenFromHeader((string) $_SERVER['HTTP_AUTHORIZATION']);
     }
 
     /**
      * 从请求中获取授权令牌
-     * 
-     * 此方法旨在从HTTP请求的Authorization头部获取Bearer令牌
-     * 如果请求中没有直接包含Authorization头部,则尝试从备用头部中获取令牌
-     * 这种方法常用于API认证过程中,提取令牌以验证请求的合法性
-     * 
-     * @param  Request $request 请求对象,包含HTTP请求的所有信息
-     * @return mixed|string 返回提取的令牌,如果无法提取则返回空字符串
+     *
+     * 优先读 Authorization 头,取不到时再读服务器重写后留下的备用头。
+     *
+     * @param Request $request 请求对象
+     * @return string 提取到的token,不存在时返回空字符串
      */
     public function getRequestToken($request)
     {
-        // 尝试从请求的Authorization头部获取令牌
-        $authorization = $request->header('authorization') ?: $this->getFromAltHeaders($request);
-        // 定义默认的令牌类型为Bearer
-        $method = 'bearer';
-        // 移除令牌类型标识(如Bearer),并返回清理后的令牌值
-        // 去除token中可能存在的bearer标识
-        $$result = trim(str_ireplace($method, '', $authorization));
-        return $$result;
+        // 先读标准的 Authorization 头
+        $authorization = '';
+        if (is_object($request) && method_exists($request, 'header')) {
+            $value = $request->header('authorization');
+            $authorization = is_string($value) ? $value : '';
+        }
+
+        // 标准头为空时,尝试备用头
+        if ($authorization === '' && is_object($request) && method_exists($request, 'header')) {
+            $authorization = $this->getFromAltHeaders($request);
+        }
+
+        return $this->parseTokenFromHeader($authorization);
     }
 
     /**
      * 从请求的备用头部中获取认证信息
-     * 
-     * 此方法旨在获取请求中的认证信息,首先尝试从'HTTP_AUTHORIZATION'头部获取
-     * 如果不存在,则尝试从'REDIRECT_HTTP_AUTHORIZATION'头部获取
-     * 这种做法是因为在某些环境下,认证信息可能不会直接包含在请求的头部中
-     * 而是被重定向过程中的服务器端逻辑移动到了备用头部
-     * 
-     * @param Request $request 请求对象,用于访问请求头部信息
-     * @return mixed|string 返回获取到的认证信息,如果都不存在则返回空字符串
+     *
+     * 部分服务器(Apache CGI、重写规则)会把 Authorization 挪到
+     * REDIRECT_HTTP_AUTHORIZATION,这里按这个顺序兜底。
+     *
+     * @param Request $request 请求对象
+     * @return string 认证头部原文
      */
     protected function getFromAltHeaders(Request $request)
     {
-        // 尝试从'HTTP_AUTHORIZATION'头部获取认证信息,如果不存在则使用默认值''
-        $result = $request->header('HTTP_AUTHORIZATION') ?: $request->header('REDIRECT_HTTP_AUTHORIZATION');
-        return $result;
+        $redirect = (string) $request->server('REDIRECT_HTTP_AUTHORIZATION', '');
+        if ($redirect !== '') {
+            return $redirect;
+        }
+
+        return (string) $request->server('HTTP_AUTHORIZATION', '');
+    }
+
+    /**
+     * 从 Authorization 头部值里取出 token 本身
+     *
+     * 只去掉开头的 “Bearer ” 前缀,不用 str_ireplace 全串替换,
+     * 避免 token 内部恰好含有 bearer 字样时被误伤。
+     *
+     * @param string $header 头部原文,例如 “Bearer abc.def.ghi”
+     * @return string token 本身,取不到时返回空字符串
+     */
+    protected function parseTokenFromHeader($header)
+    {
+        $header = trim((string) $header);
+        if ($header === '') {
+            return '';
+        }
+
+        // 前缀不区分大小写,但必须出现在开头且带空白
+        if (stripos($header, 'bearer ') === 0) {
+            return trim(substr($header, 7));
+        }
+
+        return $header;
     }
 
     /**
      * 检查JWT标识是否在黑名单中
-     * 
-     * 本函数用于验证给定的JWT标识是否已被标记为无效,即是否存在于黑名单中
-     * 如果JWT标识存在于黑名单中,表示该令牌已被注销,不能再用于授权访问
-     * 
-     * @param string $jwt_ide JWT标识符,用于在黑名单中进行查找
-     * @return mixed|bool 如果JWT标识存在于黑名单中,则返回true;否则返回false
+     *
+     * @param string $jwt_ide JWT标识符
+     * @return bool 在黑名单中返回 true
+     * @throws \Exception 缓存不可用时抛出,这里选择“失败即拒绝”而不是放行
      */
     protected function InBlacklist($jwt_ide = '')
     {
-        // 构建缓存键名,前缀为'jwt_ide_',后缀为JWT标识符
         $key = 'jwt_ide_' . $jwt_ide;
-        // 尝试从缓存中获取指定键名的值,如果不存在则返回false
-        if (!cache($key)) {
-            return false;
+
+        try {
+            // 缓存里没有值就视为没有注销
+            if (!cache($key)) {
+                return false;
+            }
+        } catch (\Throwable $e) {
+            // 缓存不可用时不能静默放行,否则黑名单形同虚设
+            throw new \Exception('缓存不可用,无法校验token状态:' . $e->getMessage(), self::ENCRYPT_EORROR);
         }
-        // 如果缓存中存在指定键名的值,表示JWT标识存在于黑名单中,返回true
+
         return true;
     }
 
     /**
      * 将JWT标识添加到黑名单
-     * 该方法用于将给定的JWT标识添加到系统的黑名单中,以禁止该令牌未来的使用
-     * 主要用于令牌过期或需要提前吊销的情况
      *
-     * @param string $jwt_ide JWT标识符,用于唯一标识一个令牌
-     * @return mixed|bool 如果添加成功,返回true;否则返回错误信息
+     * @param string $jwt_ide JWT标识符
+     * @return bool 写入成功返回 true
      */
     protected function AddBlacklist($jwt_ide = '')
     {
-        // 构建缓存键名,以JWT标识为键,添加到黑名单缓存中
         $key = 'jwt_ide_' . $jwt_ide;
-        // 将JWT标识符及其对应的值(这里使用1作为占位符)缓存起来,缓存有效期为$refresh时间
-        // 这里的缓存机制用于标记该JWT标识为无效,实际应用中可以根据需求调整缓存策略
+
+        // 缓存时长与 token 有效期一致,过期后黑名单自动释放
         cache($key, 1, $this->refresh);
-        // 添加成功后,返回true
+
         return true;
     }
 
     /**
      * 生成指定长度的随机字符串
-     * 
-     * 本函数用于生成一个包含大小写字母和数字的随机字符串
-     * 此功能可以用于生成密码、验证码、或其他需要随机字符串的场景
-     * 
-     * @param int $length 指定生成的随机字符串的长度.默认为16
-     * @return mixed|string 返回生成的随机字符串.如果发生错误,可能返回NULL
+     *
+     * 用作 JWT 唯一标识,必须不可预测,所以用 random_int(CSPRNG)
+     * 而不是 mt_rand(可预测的伪随机)。
+     *
+     * @param int $length 随机字符串长度,默认16
+     * @return string 生成的随机字符串
      */
     public function Random($length = 16)
     {
-        // 定义包含所有可能字符的字符串,包括大小写字母和数字
         $chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-        // 初始化随机字符串
+        $max = strlen($chars) - 1;
         $str = '';
-        // 循环生成随机字符串
-        for ($i = 0; $i < $length; $i++) {
-            // 从所有可能字符中随机选择一个字符,并将其添加到随机字符串中
-            $str .= substr($chars, mt_rand(0, strlen($chars) - 1), 1);
+
+        for ($i = 0; $i < (int) $length; $i++) {
+            $str .= $chars[random_int(0, $max)];
         }
-        // 返回生成的随机字符串
+
         return $str;
     }
 
     /**
      * 将对象转换为数组
-     * 这个函数递归处理对象中的所有属性,确保所有属性都被转换为数组形式
-     * 如果属性是对象或数组,则递归调用自身进行转换,直到所有元素都是基本类型
-     * 
-     * @param mixed|object|array $obj 要转换的对象或数组
-     * @return mixed|array 转换后的数组
+     * 递归处理对象中的所有属性,直到所有元素都是基本类型
+     *
+     * @param mixed $obj 要转换的对象或数组
+     * @return array 转换后的数组
      */
     public function objectToArray($obj)
     {
-        // 检查参数是否为对象,如果是则获取其属性,如果不是则直接使用
         $_arr = is_object($obj) ? get_object_vars($obj) : $obj;
-        // 递归处理每个元素,确保所有元素都被转换为数组
-        foreach ($_arr as $key => $val) {
-            // 如果当前元素是数组或对象,则递归调用自身进行转换
-            $val = (is_array($val) || is_object($val)) ? self::objectToArray($val) : $val;
-            // 将转换后的元素添加到结果数组中
-            $arr[$key] = $val;
+
+        // 入参为空数组时下面的循环不会执行,先初始化,避免返回未定义变量
+        $result = [];
+        if (!is_array($_arr)) {
+            return $result;
         }
-        // 返回转换后的数组
-        return $arr;
+
+        foreach ($_arr as $key => $val) {
+            // 数组或对象继续递归,其余原样保留
+            $result[$key] = (is_array($val) || is_object($val)) ? $this->objectToArray($val) : $val;
+        }
+
+        return $result;
     }
 }
