@@ -62,12 +62,8 @@ class Jwt
             throw new \Exception('未设置jwt秘钥', self::JWT_SECRET_MISS);
         }
 
-        // firebase/php-jwt 7.x 会校验 HMAC 密钥长度:HS256 要求至少 32 字节,
-        // 否则底层直接抛 "Provided key is too short"。
-        // 配置里的 secret 通常是一段普通字符串,这里无论长短统一过一遍 deriveKey() 转成 32 字节密钥
-        if ($this->secret !== '') {
-            $this->secret = $this->deriveKey($this->secret);
-        }
+        // 上面已保证 secret 非空,这里直接过一遍 deriveKey() 转成实际参与签名的密钥
+        $this->secret = $this->deriveKey($this->secret);
 
         // exp：签发后多久要求刷新(不是token失效时间),默认 10 小时
         $this->exp = !empty($this->cfg['exp']) ? (int) $this->cfg['exp'] : ((60 * 60) * 10);
@@ -77,23 +73,19 @@ class Jwt
     }
 
     /**
-     * 把配置里的秘钥字符串转换成 HS256 能用的密钥
+     * 把配置里的秘钥字符串转换成实际参与签名的密钥
      *
-     * firebase/php-jwt 7.x 对 HMAC 密钥有长度校验:HS256 要求至少 32 字节(256 位),
-     * 配置里写一段普通短字符串(例如 15 个字符)会因为太短直接抛 "Provided key is too short",
-     * 所以这里统一做一次 SHA-256 派生,产出固定的 32 字节二进制密钥,配置里就不用写超长串了。
+     * 做法是 SHA-256 派生:配置里写多长都会得到一个固定的 32 字节二进制密钥,
+     * 同一个 secret 每次结果相同,签发与校验能正常互通,配置文件里就不用写超长串了。
      *
-     * 三点说明:
-     * - 派生结果是确定的,同一个 secret 每次都得到同一个密钥,签发与校验能正常互通
-     * - 不论配置里给的是长串还是短串,都统一派生一次,行为固定,不会因为换了密钥长度而变化
-     * - 派生只补足长度,不增加真实强度,生产环境仍建议直接配置 32 字节以上的随机串
+     * 注意:派生不会凭空增加真实强度,生产环境的 secret 仍建议用足够随机的一段字符串
      *
      * @param string $secret 配置里的原始秘钥字符串
      * @return string 实际参与签名的密钥
      */
     protected function deriveKey(string $secret): string
     {
-        // 第三个参数为 true 时返回 32 字节二进制串,正好满足 HS256 的 256 位要求
+        // 第三个参数为 true 时返回 32 字节二进制串
         return hash('sha256', $secret, true);
     }
 
