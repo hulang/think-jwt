@@ -1,10 +1,6 @@
-**ThinkPHP 8.0+ Jwt**
+**ThinkPHP 8.2+ Jwt**
 
 基于`firebase/php-jwt ^7.2`的`ThinkPHP 8.0+ JWT 验证`，内置路由中间件
-
-<p align="center"> 
-  您是第  <img src="https://profile-counter.glitch.me/github:hulang:think-jwt/count.svg" />位访问者
-</p>
 
 #### 安装 
 
